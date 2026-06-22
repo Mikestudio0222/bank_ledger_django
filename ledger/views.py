@@ -167,17 +167,33 @@ def dashboard_view(request):
     return render(request, 'ledger/dashboard.html', context)
 
 
+def _card_json(card):
+    """序列化银行卡为 JSON 友好格式"""
+    return {
+        'id': card.pk,
+        'name': card.name,
+        'balance': str(card.balance),
+        'icon': card.icon,
+    }
+
+
 @login_required
 def add_bank_card(request):
-    """添加银行卡"""
+    """添加银行卡（支持 AJAX）"""
     if request.method == 'POST':
         form = BankCardForm(request.POST)
+        is_ajax = request.headers.get('X-Requested-With') == 'XMLHttpRequest'
         if form.is_valid():
             bank_card = form.save(commit=False)
             bank_card.user = request.user
             bank_card.save()
+            if is_ajax:
+                return JsonResponse({'success': True, 'card': _card_json(bank_card)})
             messages.success(request, '银行卡添加成功！')
             return redirect('dashboard')
+        if is_ajax:
+            errors = {f: [str(e) for e in errs] for f, errs in form.errors.items()}
+            return JsonResponse({'success': False, 'errors': errors}, status=400)
     else:
         form = BankCardForm()
 
@@ -186,15 +202,22 @@ def add_bank_card(request):
 
 @login_required
 def edit_bank_card(request, pk):
-    """编辑银行卡"""
+    """编辑银行卡（支持 AJAX）"""
     bank_card = get_object_or_404(BankCard, pk=pk, user=request.user)
 
     if request.method == 'POST':
         form = BankCardForm(request.POST, instance=bank_card)
+        is_ajax = request.headers.get('X-Requested-With') == 'XMLHttpRequest'
         if form.is_valid():
             form.save()
+            bank_card.refresh_from_db()
+            if is_ajax:
+                return JsonResponse({'success': True, 'card': _card_json(bank_card)})
             messages.success(request, '银行卡修改成功！')
             return redirect('dashboard')
+        if is_ajax:
+            errors = {f: [str(e) for e in errs] for f, errs in form.errors.items()}
+            return JsonResponse({'success': False, 'errors': errors}, status=400)
     else:
         form = BankCardForm(instance=bank_card)
 
@@ -203,16 +226,27 @@ def edit_bank_card(request, pk):
 
 @login_required
 def delete_bank_card(request, pk):
-    """删除银行卡"""
+    """删除银行卡（支持 AJAX）"""
     bank_card = get_object_or_404(BankCard, pk=pk, user=request.user)
     expense_count = bank_card.expenses.count()
+    is_ajax = request.headers.get('X-Requested-With') == 'XMLHttpRequest'
 
     if request.method == 'POST':
         if expense_count:
+            if is_ajax:
+                return JsonResponse({
+                    'success': False,
+                    'error': '这张银行卡已有消费记录，请先删除相关记录后再删除银行卡。'
+                }, status=400)
             messages.error(request, '这张银行卡已有消费记录，请先处理相关记录后再删除。')
             return redirect('dashboard')
 
         bank_card.delete()
+        total = BankCard.objects.filter(user=request.user).aggregate(
+            total=Sum('balance')
+        )['total'] or Decimal('0.00')
+        if is_ajax:
+            return JsonResponse({'success': True, 'total_balance': str(total)})
         messages.success(request, '银行卡已删除！')
         return redirect('dashboard')
 
@@ -296,12 +330,13 @@ def add_expense(request):
 
 @login_required
 def delete_expense(request, pk):
-    """删除消费记录"""
+    """删除消费记录（支持 AJAX）"""
     expense = get_object_or_404(
         Expense.objects.select_related('bank_card'),
         pk=pk,
         user=request.user,
     )
+    is_ajax = request.headers.get('X-Requested-With') == 'XMLHttpRequest'
 
     if request.method == 'POST':
         with transaction.atomic():
@@ -314,10 +349,32 @@ def delete_expense(request, pk):
                 pk=expense.bank_card_id,
                 user=request.user,
             )
+            restored_amount = expense.amount
 
-            bank_card.balance += expense.amount
+            bank_card.balance += restored_amount
             bank_card.save(update_fields=['balance', 'updated_at'])
             expense.delete()
+
+        if is_ajax:
+            today = timezone.now().date()
+            month_start = today.replace(day=1)
+            user_expenses = Expense.objects.filter(user=request.user)
+            return JsonResponse({
+                'success': True,
+                'balance': str(bank_card.balance),
+                'total_balance': str(
+                    BankCard.objects.filter(user=request.user).aggregate(
+                        total=Sum('balance')
+                    )['total'] or Decimal('0.00')
+                ),
+                'today_total': str(user_expenses.filter(expense_date=today).aggregate(
+                    total=Sum('amount')
+                )['total'] or Decimal('0.00')),
+                'month_total': str(user_expenses.filter(expense_date__gte=month_start).aggregate(
+                    total=Sum('amount')
+                )['total'] or Decimal('0.00')),
+                'total_records': user_expenses.count(),
+            })
 
         messages.success(request, '记录已删除，余额已恢复！')
         return redirect('dashboard')

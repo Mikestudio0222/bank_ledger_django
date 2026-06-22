@@ -4,26 +4,20 @@
 
 {% block content %}
 <div class="card shadow">
-    <div class="card-body p-4">
-        <div class="d-flex justify-content-between align-items-center mb-4">
-            <h4 class="mb-0">
-                <i class="fas fa-list me-2"></i>全部消费记录
-            </h4>
-            <a href="{% url 'dashboard' %}" class="btn btn-outline-primary">
-                <i class="fas fa-arrow-left me-2"></i>返回首页
+    <div class="card-body p-3">
+        <div class="d-flex justify-content-between align-items-center mb-3">
+            <h5 class="mb-0"><i class="fas fa-list me-2"></i>全部消费记录</h5>
+            <a href="{% url 'dashboard' %}" class="btn btn-outline-primary btn-sm">
+                <i class="fas fa-arrow-left me-1"></i>返回首页
             </a>
         </div>
 
         <!-- 分类筛选 -->
-        <div class="mb-4">
-            <div class="d-flex flex-wrap gap-2">
-                <a href="?category=" class="btn btn-sm {% if not selected_category %}btn-primary{% else %}btn-outline-primary{% endif %} filter-link">
-                    全部
-                </a>
+        <div class="mb-3">
+            <div class="d-flex flex-wrap gap-1">
+                <a href="?category=" class="btn btn-sm {% if not selected_category %}btn-primary{% else %}btn-outline-primary{% endif %}">全部</a>
                 {% for value, label in categories %}
-                <a href="?category={{ value }}" class="btn btn-sm {% if selected_category == value %}btn-primary{% else %}btn-outline-primary{% endif %} filter-link">
-                    {{ label }}
-                </a>
+                <a href="?category={{ value }}" class="btn btn-sm {% if selected_category == value %}btn-primary{% else %}btn-outline-primary{% endif %}">{{ label }}</a>
                 {% endfor %}
             </div>
         </div>
@@ -31,142 +25,182 @@
         <div id="expenses-list">
         {% if page_obj %}
             {% for expense in page_obj %}
-            <div class="expense-item">
-                <div class="row align-items-center">
-                    <div class="col-auto">
-                        <div class="bg-danger text-white rounded-3 p-3">
-                            <i class="fas fa-shopping-cart"></i>
-                        </div>
-                    </div>
-                    <div class="col">
-                        <div class="d-flex justify-content-between align-items-start mb-1">
-                            <h6 class="mb-0">{{ expense.category }}</h6>
-                            <span class="amount-negative fs-5">-¥{{ expense.amount }}</span>
-                        </div>
-                        <p class="text-muted small mb-0">
+            <div class="expense-item" id="expense-{{ expense.pk }}">
+                <div class="d-flex justify-content-between align-items-center">
+                    <div>
+                        <div class="fw-semibold">{{ expense.category }}</div>
+                        <small class="text-muted">
                             {{ expense.bank_card.name }} &bull; {{ expense.note|default:"无备注" }} &bull; {{ expense.expense_date }}
-                        </p>
+                        </small>
+                    </div>
+                    <div class="text-end">
+                        <div class="amount-negative fw-bold">-¥{{ expense.amount }}</div>
+                        <button class="btn btn-sm btn-outline-danger mt-1" onclick="openDeleteExpenseModal({{ expense.pk }})" title="删除">
+                            <i class="fas fa-trash fa-xs"></i>
+                        </button>
                     </div>
                 </div>
             </div>
             {% endfor %}
         {% else %}
-        <div class="text-center py-5 text-muted" id="expenses-empty">
-            <i class="fas fa-receipt fa-4x mb-3 opacity-25"></i>
-            <p>没有找到消费记录</p>
-        </div>
+        <div class="text-center py-5 text-muted"><p>没有找到消费记录</p></div>
         {% endif %}
         </div>
 
-        <!-- 加载指示器 -->
-        <div id="loading-indicator" class="text-center py-4" style="display:none;">
-            <div class="spinner-border text-primary" role="status">
-                <span class="visually-hidden">加载中...</span>
-            </div>
-            <p class="text-muted mt-2 mb-0">加载更多记录...</p>
+        <div id="loading-indicator" class="text-center py-3" style="display:none;">
+            <div class="spinner-border spinner-border-sm text-primary"></div>
+            <small class="text-muted ms-2">加载中...</small>
         </div>
-
-        <!-- 已加载全部 -->
         <div id="end-message" class="text-center py-3 text-muted" style="display:none;">
             <i class="fas fa-check-circle me-1"></i>已加载全部记录
         </div>
-
-        <!-- 无限滚动哨兵 -->
         <div id="scroll-sentinel"></div>
+    </div>
+</div>
+
+{# ———— 删除确认 Modal ———— #}
+<div class="modal fade" id="deleteModal" tabindex="-1">
+    <div class="modal-dialog modal-dialog-centered modal-sm">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">确认删除</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <p>确定要删除这条消费记录吗？余额会自动恢复。</p>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">取消</button>
+                <button type="button" class="btn btn-danger" id="delete-confirm-btn">
+                    <i class="fas fa-trash me-1"></i>确认删除
+                </button>
+            </div>
+        </div>
     </div>
 </div>
 {% endblock %}
 
 {% block extra_js %}
 <script>
-    document.addEventListener('DOMContentLoaded', function() {
-        let currentPage = {{ page_obj.number }};
-        const hasNext = {{ page_obj.has_next|yesno:"true,false" }};
-        const selectedCategory = '{{ selected_category|default:"" }}';
-        const listEl = document.getElementById('expenses-list');
-        const sentinel = document.getElementById('scroll-sentinel');
-        const loadingEl = document.getElementById('loading-indicator');
-        const endMsg = document.getElementById('end-message');
-        let loading = false;
+function escapeHtml(text) {
+    const div = document.createElement('div');
+    div.textContent = text;
+    return div.innerHTML;
+}
 
-        if (!hasNext) {
-            sentinel.style.display = 'none';
-            showEndMessage();
-        }
+function getCSRF() {
+    return document.querySelector('[name=csrfmiddlewaretoken]').value;
+}
 
-        const observer = new IntersectionObserver(function(entries) {
-            if (entries[0].isIntersecting && !loading) {
-                loadMore();
+// ============ 删除 Modal ============
+const deleteModal = new bootstrap.Modal(document.getElementById('deleteModal'));
+let deletePk = null;
+
+document.getElementById('delete-confirm-btn').addEventListener('click', async function() {
+    if (!deletePk) return;
+    const btn = this;
+    btn.disabled = true;
+    btn.innerHTML = '<i class="fas fa-spinner fa-spin me-1"></i>删除中...';
+
+    try {
+        const resp = await fetch('/expenses/' + deletePk + '/delete/', {
+            method: 'POST',
+            headers: { 'X-Requested-With': 'XMLHttpRequest', 'X-CSRFToken': getCSRF() },
+        });
+        const data = await resp.json();
+
+        if (data.success) {
+            document.getElementById('expense-' + deletePk)?.remove();
+            if (!document.querySelector('#expenses-list .expense-item')) {
+                document.getElementById('expenses-list').innerHTML = '<div class="text-center py-5 text-muted"><p>没有找到消费记录</p></div>';
+                document.getElementById('scroll-sentinel').style.display = 'none';
             }
-        }, { rootMargin: '200px' });
-
-        if (hasNext) {
-            observer.observe(sentinel);
+            deleteModal.hide();
+        } else {
+            alert(data.error || '删除失败');
         }
+    } catch (err) {
+        alert('网络错误，请重试');
+    } finally {
+        btn.disabled = false;
+        btn.innerHTML = '<i class="fas fa-trash me-1"></i>确认删除';
+    }
+});
 
-        function showEndMessage() {
-            endMsg.style.display = 'block';
-        }
+function openDeleteExpenseModal(pk) {
+    deletePk = pk;
+    deleteModal.show();
+}
 
-        async function loadMore() {
-            loading = true;
-            loadingEl.style.display = 'block';
-            currentPage++;
+// ============ 无限滚动 ============
+(function() {
+    let currentPage = {{ page_obj.number }};
+    const hasNext = {{ page_obj.has_next|yesno:"true,false" }};
+    const selectedCategory = '{{ selected_category|default:"" }}';
+    const listEl = document.getElementById('expenses-list');
+    const sentinel = document.getElementById('scroll-sentinel');
+    const loadingEl = document.getElementById('loading-indicator');
+    const endMsg = document.getElementById('end-message');
+    let loading = false;
 
-            const params = new URLSearchParams({ page: currentPage });
-            if (selectedCategory) params.set('category', selectedCategory);
+    if (!hasNext) { sentinel.style.display = 'none'; endMsg.style.display = 'block'; }
 
-            try {
-                const resp = await fetch('?' + params.toString(), {
-                    headers: { 'X-Requested-With': 'XMLHttpRequest' },
+    const observer = new IntersectionObserver(function(entries) {
+        if (entries[0].isIntersecting && !loading) loadMore();
+    }, { rootMargin: '200px' });
+
+    if (hasNext) observer.observe(sentinel);
+
+    async function loadMore() {
+        loading = true;
+        loadingEl.style.display = 'block';
+        currentPage++;
+
+        const params = new URLSearchParams({ page: currentPage });
+        if (selectedCategory) params.set('category', selectedCategory);
+
+        try {
+            const resp = await fetch('?' + params.toString(), {
+                headers: { 'X-Requested-With': 'XMLHttpRequest' },
+            });
+            const data = await resp.json();
+
+            if (data.items && data.items.length > 0) {
+                const fragment = document.createDocumentFragment();
+                data.items.forEach(function(item) {
+                    const div = document.createElement('div');
+                    div.className = 'expense-item';
+                    div.id = 'expense-' + item.id;
+                    div.innerHTML = `
+                        <div class="d-flex justify-content-between align-items-center">
+                            <div>
+                                <div class="fw-semibold">${escapeHtml(item.category)}</div>
+                                <small class="text-muted">${escapeHtml(item.bank_card_name)} &bull; ${escapeHtml(item.note || '无备注')} &bull; ${escapeHtml(item.expense_date)}</small>
+                            </div>
+                            <div class="text-end">
+                                <div class="amount-negative fw-bold">-¥${escapeHtml(item.amount)}</div>
+                                <button class="btn btn-sm btn-outline-danger mt-1" onclick="openDeleteExpenseModal(${item.id})" title="删除">
+                                    <i class="fas fa-trash fa-xs"></i>
+                                </button>
+                            </div>
+                        </div>`;
+                    fragment.appendChild(div);
                 });
-                const data = await resp.json();
-
-                if (data.items && data.items.length > 0) {
-                    const fragment = document.createDocumentFragment();
-                    data.items.forEach(function(item) {
-                        const div = document.createElement('div');
-                        div.className = 'expense-item';
-                        div.innerHTML = `
-                            <div class="row align-items-center">
-                                <div class="col-auto">
-                                    <div class="bg-danger text-white rounded-3 p-3">
-                                        <i class="fas fa-shopping-cart"></i>
-                                    </div>
-                                </div>
-                                <div class="col">
-                                    <div class="d-flex justify-content-between align-items-start mb-1">
-                                        <h6 class="mb-0">${escapeHtml(item.category)}</h6>
-                                        <span class="amount-negative fs-5">-¥${escapeHtml(item.amount)}</span>
-                                    </div>
-                                    <p class="text-muted small mb-0">
-                                        ${escapeHtml(item.bank_card_name)} &bull; ${escapeHtml(item.note || '无备注')} &bull; ${escapeHtml(item.expense_date)}
-                                    </p>
-                                </div>
-                            </div>`;
-                        fragment.appendChild(div);
-                    });
-                    listEl.appendChild(fragment);
-                }
-
-                if (!data.has_next) {
-                    observer.unobserve(sentinel);
-                    sentinel.style.display = 'none';
-                    showEndMessage();
-                }
-            } catch (err) {
-                currentPage--;
-            } finally {
-                loading = false;
-                loadingEl.style.display = 'none';
+                listEl.appendChild(fragment);
             }
-        }
 
-        function escapeHtml(text) {
-            const div = document.createElement('div');
-            div.textContent = text;
-            return div.innerHTML;
+            if (!data.has_next) {
+                observer.unobserve(sentinel);
+                sentinel.style.display = 'none';
+                endMsg.style.display = 'block';
+            }
+        } catch (err) {
+            currentPage--;
+        } finally {
+            loading = false;
+            loadingEl.style.display = 'none';
         }
-    });
+    }
+})();
 </script>
 {% endblock %}
