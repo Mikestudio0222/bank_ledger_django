@@ -120,6 +120,18 @@ body {
     text-align: center;
 }
 
+.card-toggle-btn {
+    color: rgba(255,255,255,0.7);
+    border: none;
+    background: transparent;
+    padding: 0 4px;
+    line-height: 1;
+}
+.card-toggle-btn:hover, .card-toggle-btn:active {
+    color: #fff;
+    background: transparent !important;
+}
+
 .stat-card.today {
     background: linear-gradient(135deg, #dc3545 0%, #ef4444 100%);
 }

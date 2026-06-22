@@ -378,6 +378,7 @@ def delete_expense(request, pk):
             user_records = Expense.objects.filter(user=request.user)
             return JsonResponse({
                 'success': True,
+                'card_id': bank_card.pk,
                 'balance': str(bank_card.balance),
                 'total_balance': str(
                     BankCard.objects.filter(user=request.user).aggregate(
