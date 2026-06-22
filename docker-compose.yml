@@ -1,14 +1,56 @@
-
-
 services:
+  db:
+    image: mysql:8.0
+    container_name: ledger_db
+    restart: always
+    environment:
+      MYSQL_ROOT_PASSWORD: ${DB_PASSWORD}
+      MYSQL_DATABASE: ${DB_NAME}
+      MYSQL_CHARSET: utf8mb4
+      MYSQL_COLLATION: utf8mb4_unicode_ci
+    volumes:
+      - mysql_data:/var/lib/mysql
+    ports:
+      - "127.0.0.1:3306:3306"
+
   web:
     build: .
-    container_name: ledger_app
-    ports:
-      - "8000:8000"
-    volumes:
-      # 这一行非常核心：把容器内部的数据文件“映射”到你电脑当前目录下
-      # 这样你在系统里记的账才不会因为 Docker 容器的重启而消失
-      - .:/app
+    container_name: ledger_web
+    restart: always
+    depends_on:
+      - db
     environment:
-      - DEBUG=True
+      - DEBUG=${DEBUG}
+      - SECRET_KEY=${SECRET_KEY}
+      - ALLOWED_HOSTS=${ALLOWED_HOSTS}
+      - CSRF_TRUSTED_ORIGINS=${CSRF_TRUSTED_ORIGINS}
+      - DB_ENGINE=mysql
+      - DB_NAME=${DB_NAME}
+      - DB_USER=${DB_USER}
+      - DB_PASSWORD=${DB_PASSWORD}
+      - DB_HOST=db
+      - DB_PORT=3306
+      - EMAIL_HOST=${EMAIL_HOST}
+      - EMAIL_PORT=${EMAIL_PORT}
+      - EMAIL_USE_TLS=${EMAIL_USE_TLS}
+      - EMAIL_HOST_USER=${EMAIL_HOST_USER}
+      - EMAIL_HOST_PASSWORD=${EMAIL_HOST_PASSWORD}
+      - DEFAULT_FROM_EMAIL=${DEFAULT_FROM_EMAIL}
+    volumes:
+      - staticfiles:/app/staticfiles
+
+  nginx:
+    image: nginx:alpine
+    container_name: ledger_nginx
+    restart: always
+    depends_on:
+      - web
+    ports:
+      - "80:80"
+    volumes:
+      - ./nginx.conf:/etc/nginx/conf.d/default.conf:ro
+      - staticfiles:/app/staticfiles:ro
+
+volumes:
+  mysql_data:
+  staticfiles:
