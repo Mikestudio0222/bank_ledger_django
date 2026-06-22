@@ -1,66 +1,98 @@
 {% extends 'ledger/base.html' %}
 {% load static %}
 
-{% block title %}首页 - 银行卡记账系统{% endblock %}
+{% block title %}首页 - 记账工具{% endblock %}
 
 {% block content %}
-<!-- 总余额 -->
-<div class="card mb-3">
-    <div class="card-body p-3">
-        <div class="d-flex justify-content-between align-items-center">
-            <div>
-                <small class="text-muted">总余额</small>
-                <h3 class="fw-bold amount-positive mb-0" id="total-balance">¥{{ total_balance }}</h3>
-            </div>
-            <a href="{% url 'expenses_list' %}" class="btn btn-outline-primary btn-sm">
-                <i class="fas fa-list me-1"></i>全部记录
-            </a>
-        </div>
-    </div>
-</div>
 
-<!-- 统计 -->
-<div class="row mb-3">
-    <div class="col-4">
-        <div class="stat-card today shadow-sm">
-            <small>今日支出</small>
-            <h5 class="fw-bold mb-0" id="today-total">¥{{ today_total }}</h5>
-        </div>
-    </div>
-    <div class="col-4">
-        <div class="stat-card month shadow-sm">
-            <small>本月支出</small>
-            <h5 class="fw-bold mb-0" id="month-total">¥{{ month_total }}</h5>
-        </div>
-    </div>
-    <div class="col-4">
-        <div class="stat-card total shadow-sm">
-            <small>记录总数</small>
-            <h5 class="fw-bold mb-0" id="total-records">{{ total_records }}</h5>
-        </div>
-    </div>
-</div>
-
-<!-- 银行卡 -->
+{# ============ 1. 收支记录 ============ #}
 <div class="card mb-3">
     <div class="card-body p-3">
         <div class="d-flex justify-content-between align-items-center mb-3">
-            <h5 class="mb-0"><i class="fas fa-credit-card me-2"></i>我的银行卡</h5>
+            <h5 class="mb-0"><i class="fas fa-list me-2"></i>最近记录</h5>
+            <a href="{% url 'expenses_list' %}" class="btn btn-outline-primary btn-sm">
+                全部 <i class="fas fa-arrow-right ms-1"></i>
+            </a>
+        </div>
+        <div id="expenses-list">
+        {% if expenses %}
+            {% for record in expenses %}
+            <div class="expense-item" id="expense-{{ record.pk }}">
+                <div class="d-flex justify-content-between align-items-center">
+                    <div>
+                        <div class="fw-semibold">{{ record.category }}</div>
+                        <small class="text-muted">
+                            {{ record.bank_card.name }} &bull; {{ record.note|default:"无备注" }} &bull; {{ record.expense_date }}
+                        </small>
+                    </div>
+                    <div class="text-end">
+                        {% if record.record_type == 'income' %}
+                        <div class="amount-positive fw-bold">+¥{{ record.amount }}</div>
+                        {% else %}
+                        <div class="amount-negative fw-bold">-¥{{ record.amount }}</div>
+                        {% endif %}
+                        <button class="btn btn-sm btn-outline-danger mt-1" onclick="openDeleteExpenseModal({{ record.pk }})" title="删除">
+                            <i class="fas fa-trash fa-xs"></i>
+                        </button>
+                    </div>
+                </div>
+            </div>
+            {% endfor %}
+        {% else %}
+        <div class="text-center py-4 text-muted" id="expenses-empty">
+            <i class="fas fa-receipt fa-3x mb-2 opacity-25"></i>
+            <p class="mb-0">还没有记录</p>
+        </div>
+        {% endif %}
+        </div>
+    </div>
+</div>
+
+{# ============ 2. 快速记录 ============ #}
+{% if bank_cards %}
+<div class="card mb-3">
+    <div class="card-body p-3">
+        <h5 class="mb-3"><i class="fas fa-pen-to-square me-2"></i>快速记录</h5>
+        <form method="post" action="{% url 'add_expense' %}" id="expense-form">
+            {% csrf_token %}
+            <div class="row g-2">
+                <div class="col-4">{{ expense_form.record_type }}</div>
+                <div class="col-8">{{ expense_form.amount }}</div>
+                <div class="col-6">{{ expense_form.bank_card }}</div>
+                <div class="col-6">{{ expense_form.category }}</div>
+                <div class="col-6">{{ expense_form.expense_date }}</div>
+                <div class="col-6">{{ expense_form.note }}</div>
+                <div class="col-12">
+                    <button type="submit" class="btn btn-primary w-100" id="submit-btn">
+                        <i class="fas fa-check me-1"></i>记录
+                    </button>
+                </div>
+            </div>
+        </form>
+        <div id="expense-message" class="mt-2" style="display:none;"></div>
+    </div>
+</div>
+{% endif %}
+
+{# ============ 3. 银行卡 ============ #}
+<div class="card mb-3">
+    <div class="card-body p-3">
+        <div class="d-flex justify-content-between align-items-center mb-3">
+            <h5 class="mb-0"><i class="fas fa-credit-card me-2"></i>银行卡</h5>
             <button class="btn btn-primary btn-sm" onclick="openCardModal()">
                 <i class="fas fa-plus me-1"></i>添加
             </button>
         </div>
-
         <div id="bank-cards-list">
         {% if bank_cards %}
             <div class="row g-2">
             {% for card in bank_cards %}
-            <div class="col-md-6" id="card-{{ card.pk }}">
+            <div class="col-6" id="card-{{ card.pk }}">
                 <div class="bank-card shadow-sm">
                     <div class="d-flex justify-content-between align-items-start mb-3">
                         <i class="fas {{ card.icon }} fa-lg opacity-75"></i>
-                        <div>
-                            <button class="btn btn-sm btn-light me-1" onclick="openCardModal({{ card.pk }})" title="编辑">
+                        <div class="btn-group">
+                            <button class="btn btn-sm btn-light" onclick="openCardModal({{ card.pk }})" title="编辑">
                                 <i class="fas fa-edit fa-xs"></i>
                             </button>
                             <button class="btn btn-sm btn-light" onclick="openDeleteCardModal({{ card.pk }}, '{{ card.name|escapejs }}')" title="删除">
@@ -84,65 +116,46 @@
     </div>
 </div>
 
-<!-- 快速记账 -->
-{% if bank_cards %}
-<div class="card mb-3">
-    <div class="card-body p-3">
-        <h5 class="mb-3"><i class="fas fa-pen-to-square me-2"></i>快速记账</h5>
-        <form method="post" action="{% url 'add_expense' %}" id="expense-form">
-            {% csrf_token %}
-            <div class="row g-2">
-                <div class="col-6">{{ expense_form.bank_card }}</div>
-                <div class="col-6">{{ expense_form.amount }}</div>
-                <div class="col-6">{{ expense_form.category }}</div>
-                <div class="col-6">{{ expense_form.expense_date }}</div>
-                <div class="col-12">{{ expense_form.note }}</div>
-                <div class="col-12">
-                    <button type="submit" class="btn btn-primary w-100" id="submit-btn">
-                        <i class="fas fa-check me-1"></i>记账
-                    </button>
-                </div>
-            </div>
-        </form>
-        <div id="expense-message" class="mt-2" style="display:none;"></div>
-    </div>
-</div>
-{% endif %}
-
-<!-- 最近消费 -->
+{# ============ 4. 我的余额 ============ #}
 <div class="card">
     <div class="card-body p-3">
-        <h5 class="mb-3"><i class="fas fa-receipt me-2"></i>最近消费</h5>
-        <div id="expenses-list">
-        {% if expenses %}
-            {% for expense in expenses %}
-            <div class="expense-item" id="expense-{{ expense.pk }}">
-                <div class="d-flex justify-content-between align-items-center">
-                    <div>
-                        <div class="fw-semibold">{{ expense.category }}</div>
-                        <small class="text-muted">
-                            {{ expense.bank_card.name }} &bull; {{ expense.note|default:"无备注" }} &bull; {{ expense.expense_date }}
-                        </small>
-                    </div>
-                    <div class="text-end">
-                        <div class="amount-negative fw-bold">-¥{{ expense.amount }}</div>
-                        <button class="btn btn-sm btn-outline-danger mt-1" onclick="openDeleteExpenseModal({{ expense.pk }})" title="删除">
-                            <i class="fas fa-trash fa-xs"></i>
-                        </button>
-                    </div>
+        <div class="d-flex justify-content-between align-items-center mb-3">
+            <h5 class="mb-0"><i class="fas fa-wallet me-2"></i>我的余额</h5>
+            <button class="btn btn-sm btn-outline-secondary" id="toggle-balance" onclick="toggleBalance()" title="显示/隐藏余额">
+                <i class="fas fa-eye" id="toggle-balance-icon"></i>
+            </button>
+        </div>
+        <h2 class="fw-bold amount-positive mb-3" id="total-balance">¥{{ total_balance }}</h2>
+        <div class="row g-2">
+            <div class="col-3">
+                <div class="stat-card today shadow-sm">
+                    <small>今日支出</small>
+                    <h6 class="fw-bold mb-0" id="today-expense">¥{{ today_expense_total }}</h6>
                 </div>
             </div>
-            {% endfor %}
-        {% else %}
-        <div class="text-center py-4 text-muted" id="expenses-empty">
-            <p class="mb-0">还没有消费记录</p>
-        </div>
-        {% endif %}
+            <div class="col-3">
+                <div class="stat-card" style="background:linear-gradient(135deg,#198754,#22c55e);">
+                    <small>今日收入</small>
+                    <h6 class="fw-bold mb-0" id="today-income">¥{{ today_income_total }}</h6>
+                </div>
+            </div>
+            <div class="col-3">
+                <div class="stat-card month shadow-sm">
+                    <small>本月支出</small>
+                    <h6 class="fw-bold mb-0" id="month-expense">¥{{ month_expense_total }}</h6>
+                </div>
+            </div>
+            <div class="col-3">
+                <div class="stat-card" style="background:linear-gradient(135deg,#198754,#22c55e);">
+                    <small>本月收入</small>
+                    <h6 class="fw-bold mb-0" id="month-income">¥{{ month_income_total }}</h6>
+                </div>
+            </div>
         </div>
     </div>
 </div>
 
-{# ———— 银行卡 添加/编辑 Modal ———— #}
+{# ============ Modals ============ #}
 <div class="modal fade" id="cardModal" tabindex="-1">
     <div class="modal-dialog modal-dialog-centered">
         <div class="modal-content">
@@ -152,7 +165,6 @@
                     <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
                 </div>
                 <div class="modal-body">
-                    <input type="hidden" name="csrfmiddlewaretoken" id="card-csrf" value="{{ csrf_token }}">
                     <div class="mb-3">
                         <label class="form-label">卡片名称</label>
                         <input type="text" name="name" id="card-name" class="form-control" placeholder="例如：工商银行" required>
@@ -161,57 +173,31 @@
                     <div class="mb-3">
                         <label class="form-label">选择图标</label>
                         <div class="row g-2" id="icon-picker">
-                            <div class="col-3">
-                                <button type="button" class="icon-btn btn btn-outline-primary w-100 py-2" data-icon="fa-building-columns">
-                                    <i class="fas fa-building-columns"></i>
-                                </button>
-                            </div>
-                            <div class="col-3">
-                                <button type="button" class="icon-btn btn btn-primary w-100 py-2" data-icon="fa-credit-card">
-                                    <i class="fas fa-credit-card"></i>
-                                </button>
-                            </div>
-                            <div class="col-3">
-                                <button type="button" class="icon-btn btn btn-outline-primary w-100 py-2" data-icon="fa-money-bill-wave">
-                                    <i class="fas fa-money-bill-wave"></i>
-                                </button>
-                            </div>
-                            <div class="col-3">
-                                <button type="button" class="icon-btn btn btn-outline-primary w-100 py-2" data-icon="fa-wallet">
-                                    <i class="fas fa-wallet"></i>
-                                </button>
-                            </div>
+                            <div class="col-3"><button type="button" class="icon-btn btn btn-outline-primary w-100 py-2" data-icon="fa-building-columns"><i class="fas fa-building-columns"></i></button></div>
+                            <div class="col-3"><button type="button" class="icon-btn btn btn-primary w-100 py-2" data-icon="fa-credit-card"><i class="fas fa-credit-card"></i></button></div>
+                            <div class="col-3"><button type="button" class="icon-btn btn btn-outline-primary w-100 py-2" data-icon="fa-money-bill-wave"><i class="fas fa-money-bill-wave"></i></button></div>
+                            <div class="col-3"><button type="button" class="icon-btn btn btn-outline-primary w-100 py-2" data-icon="fa-wallet"><i class="fas fa-wallet"></i></button></div>
                         </div>
                         <input type="hidden" name="icon" id="card-icon" value="fa-credit-card">
                     </div>
                 </div>
                 <div class="modal-footer">
                     <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">取消</button>
-                    <button type="submit" class="btn btn-primary" id="card-save-btn">
-                        <i class="fas fa-check me-1"></i>保存
-                    </button>
+                    <button type="submit" class="btn btn-primary" id="card-save-btn"><i class="fas fa-check me-1"></i>保存</button>
                 </div>
             </form>
         </div>
     </div>
 </div>
 
-{# ———— 删除确认 Modal ———— #}
 <div class="modal fade" id="deleteModal" tabindex="-1">
     <div class="modal-dialog modal-dialog-centered modal-sm">
         <div class="modal-content">
-            <div class="modal-header">
-                <h5 class="modal-title">确认删除</h5>
-                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
-            </div>
-            <div class="modal-body">
-                <p id="delete-message"></p>
-            </div>
+            <div class="modal-header"><h5 class="modal-title">确认删除</h5><button type="button" class="btn-close" data-bs-dismiss="modal"></button></div>
+            <div class="modal-body"><p id="delete-message"></p></div>
             <div class="modal-footer">
                 <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">取消</button>
-                <button type="button" class="btn btn-danger" id="delete-confirm-btn">
-                    <i class="fas fa-trash me-1"></i>确认删除
-                </button>
+                <button type="button" class="btn btn-danger" id="delete-confirm-btn"><i class="fas fa-trash me-1"></i>确认删除</button>
             </div>
         </div>
     </div>
@@ -220,22 +206,42 @@
 
 {% block extra_js %}
 <script>
-// ============ 辅助函数 ============
-function escapeHtml(text) {
-    const div = document.createElement('div');
-    div.textContent = text;
-    return div.innerHTML;
+// ============ 余额显隐 ============
+let balanceVisible = true;
+
+function toggleBalance() {
+    balanceVisible = !balanceVisible;
+    const el = document.getElementById('total-balance');
+    const icon = document.getElementById('toggle-balance-icon');
+    if (balanceVisible) {
+        el.textContent = '¥' + getRealBalance();
+        el.classList.remove('text-muted'); el.classList.add('amount-positive');
+        icon.className = 'fas fa-eye';
+    } else {
+        el.textContent = '****';
+        el.classList.remove('amount-positive'); el.classList.add('text-muted');
+        icon.className = 'fas fa-eye-slash';
+    }
+}
+function getRealBalance() {
+    return document.getElementById('total-balance').textContent.replace('¥','').replace('****','{{ total_balance }}');
 }
 
-function getCSRF() {
-    return document.querySelector('[name=csrfmiddlewaretoken]').value;
-}
+// ============ 辅助 ============
+function escapeHtml(t) { const d = document.createElement('div'); d.textContent = t; return d.innerHTML; }
+function getCSRF() { return document.querySelector('[name=csrfmiddlewaretoken]').value; }
 
 function updateStats(data) {
-    if (data.total_balance !== undefined) document.getElementById('total-balance').textContent = '¥' + data.total_balance;
-    if (data.today_total !== undefined) document.getElementById('today-total').textContent = '¥' + data.today_total;
-    if (data.month_total !== undefined) document.getElementById('month-total').textContent = '¥' + data.month_total;
-    if (data.total_records !== undefined) document.getElementById('total-records').textContent = data.total_records;
+    if (data.total_balance !== undefined) {
+        const el = document.getElementById('total-balance');
+        el.textContent = balanceVisible ? '¥' + data.total_balance : '****';
+        el.className = balanceVisible ? 'fw-bold amount-positive mb-3' : 'fw-bold text-muted mb-3';
+    }
+    if (data.today_expense_total !== undefined) document.getElementById('today-expense').textContent = '¥' + data.today_expense_total;
+    if (data.today_income_total !== undefined) document.getElementById('today-income').textContent = '¥' + data.today_income_total;
+    if (data.month_expense_total !== undefined) document.getElementById('month-expense').textContent = '¥' + data.month_expense_total;
+    if (data.month_income_total !== undefined) document.getElementById('month-income').textContent = '¥' + data.month_income_total;
+    if (data.total_records !== undefined) document.getElementById('total-records')?.remove();
 }
 
 // ============ 银行卡 Modal ============
@@ -244,17 +250,10 @@ let editingCardId = null;
 
 document.getElementById('card-form').addEventListener('submit', async function(e) {
     e.preventDefault();
-    const name = document.getElementById('card-name').value.trim();
-    if (!name) return;
-
+    if (!document.getElementById('card-name').value.trim()) return;
     const btn = document.getElementById('card-save-btn');
-    btn.disabled = true;
-    btn.innerHTML = '<i class="fas fa-spinner fa-spin me-1"></i>保存中...';
-
-    const url = editingCardId
-        ? '/cards/' + editingCardId + '/edit/'
-        : '/cards/add/';
-
+    btn.disabled = true; btn.innerHTML = '<i class="fas fa-spinner fa-spin me-1"></i>保存中...';
+    const url = editingCardId ? '/cards/' + editingCardId + '/edit/' : '/cards/add/';
     try {
         const resp = await fetch(url, {
             method: 'POST',
@@ -262,27 +261,17 @@ document.getElementById('card-form').addEventListener('submit', async function(e
             body: new FormData(this),
         });
         const data = await resp.json();
-
         if (data.success) {
-            if (editingCardId) {
-                updateCardInDOM(data.card);
-            } else {
-                insertCardInDOM(data.card);
-            }
-            cardModal.hide();
-            resetCardForm();
+            editingCardId ? updateCardInDOM(data.card) : insertCardInDOM(data.card);
+            cardModal.hide(); resetCardForm();
         } else if (data.errors) {
-            for (const [field, errs] of Object.entries(data.errors)) {
-                const el = document.getElementById('card-' + field + '-error');
-                if (el) { el.textContent = errs[0]; el.style.display = 'block'; }
+            for (const [f, e] of Object.entries(data.errors)) {
+                const el = document.getElementById('card-' + f + '-error');
+                if (el) { el.textContent = e[0]; el.style.display = 'block'; }
             }
         }
-    } catch (err) {
-        alert('网络错误，请重试');
-    } finally {
-        btn.disabled = false;
-        btn.innerHTML = '<i class="fas fa-check me-1"></i>保存';
-    }
+    } catch (err) { alert('网络错误'); }
+    finally { btn.disabled = false; btn.innerHTML = '<i class="fas fa-check me-1"></i>保存'; }
 });
 
 function resetCardForm() {
@@ -291,10 +280,8 @@ function resetCardForm() {
     document.getElementById('card-name').value = '';
     document.getElementById('card-name-error').style.display = 'none';
     document.getElementById('card-icon').value = 'fa-credit-card';
-    const btns = document.querySelectorAll('#icon-picker .icon-btn');
-    btns.forEach((b, i) => {
-        b.classList.remove('btn-primary');
-        b.classList.add('btn-outline-primary');
+    document.querySelectorAll('#icon-picker .icon-btn').forEach((b, i) => {
+        b.classList.remove('btn-primary'); b.classList.add('btn-outline-primary');
         if (i === 1) { b.classList.remove('btn-outline-primary'); b.classList.add('btn-primary'); }
     });
 }
@@ -304,69 +291,46 @@ function openCardModal(pk) {
     if (pk) {
         editingCardId = pk;
         document.getElementById('card-modal-title').textContent = '编辑银行卡';
-        const cardEl = document.getElementById('card-' + pk);
-        if (cardEl) {
-            document.getElementById('card-name').value = cardEl.querySelector('h6').textContent;
-            const iconClass = cardEl.querySelector('.fa-lg').className.split(' ')[1];
+        const el = document.getElementById('card-' + pk);
+        if (el) {
+            document.getElementById('card-name').value = el.querySelector('h6').textContent;
+            const iconClass = el.querySelector('.fa-lg').className.split(' ')[1];
             document.getElementById('card-icon').value = iconClass;
             document.querySelectorAll('#icon-picker .icon-btn').forEach(b => {
-                b.classList.remove('btn-primary');
-                b.classList.add('btn-outline-primary');
-                if (b.getAttribute('data-icon') === iconClass) {
-                    b.classList.remove('btn-outline-primary');
-                    b.classList.add('btn-primary');
-                }
+                b.classList.remove('btn-primary'); b.classList.add('btn-outline-primary');
+                if (b.getAttribute('data-icon') === iconClass) { b.classList.remove('btn-outline-primary'); b.classList.add('btn-primary'); }
             });
         }
     }
     cardModal.show();
 }
 
-// 图标选择
 document.getElementById('icon-picker').addEventListener('click', function(e) {
     const btn = e.target.closest('.icon-btn');
-    if (!btn) return;
-    e.preventDefault();
-    document.querySelectorAll('#icon-picker .icon-btn').forEach(b => {
-        b.classList.remove('btn-primary');
-        b.classList.add('btn-outline-primary');
-    });
-    btn.classList.remove('btn-outline-primary');
-    btn.classList.add('btn-primary');
+    if (!btn) return; e.preventDefault();
+    document.querySelectorAll('#icon-picker .icon-btn').forEach(b => { b.classList.remove('btn-primary'); b.classList.add('btn-outline-primary'); });
+    btn.classList.remove('btn-outline-primary'); btn.classList.add('btn-primary');
     document.getElementById('card-icon').value = btn.getAttribute('data-icon');
 });
 
 function insertCardInDOM(card) {
     document.getElementById('no-cards-msg')?.remove();
-    const container = document.querySelector('#bank-cards-list .row');
-    if (!container) {
-        // 从空状态恢复
-        const list = document.getElementById('bank-cards-list');
-        list.innerHTML = '<div class="row g-2"></div>';
+    if (!document.querySelector('#bank-cards-list .row')) {
+        document.getElementById('bank-cards-list').innerHTML = '<div class="row g-2"></div>';
     }
-    const html = `
-        <div class="col-md-6" id="card-${card.id}">
-            <div class="bank-card shadow-sm">
-                <div class="d-flex justify-content-between align-items-start mb-3">
-                    <i class="fas ${card.icon} fa-lg opacity-75"></i>
-                    <div>
-                        <button class="btn btn-sm btn-light me-1" onclick="openCardModal(${card.id})" title="编辑">
-                            <i class="fas fa-edit fa-xs"></i>
-                        </button>
-                        <button class="btn btn-sm btn-light" onclick="openDeleteCardModal(${card.id}, '${escapeHtml(card.name)}')" title="删除">
-                            <i class="fas fa-trash fa-xs"></i>
-                        </button>
-                    </div>
-                </div>
-                <h6 class="mb-1">${escapeHtml(card.name)}</h6>
-                <h5 class="fw-bold mb-0 card-balance" data-card-id="${card.id}">¥${card.balance}</h5>
-            </div>
-        </div>`;
-    document.querySelector('#bank-cards-list .row').insertAdjacentHTML('beforeend', html);
-    // 如果是第一张卡，刷新页面以显示记账表单
-    if (!document.getElementById('expense-form')) {
-        location.reload();
-    }
+    document.querySelector('#bank-cards-list .row').insertAdjacentHTML('beforeend',
+        '<div class="col-6" id="card-' + card.id + '">' +
+        '<div class="bank-card shadow-sm">' +
+        '<div class="d-flex justify-content-between align-items-start mb-3">' +
+        '<i class="fas ' + card.icon + ' fa-lg opacity-75"></i>' +
+        '<div class="btn-group">' +
+        '<button class="btn btn-sm btn-light" onclick="openCardModal(' + card.id + ')"><i class="fas fa-edit fa-xs"></i></button>' +
+        '<button class="btn btn-sm btn-light" onclick="openDeleteCardModal(' + card.id + ', \'' + escapeHtml(card.name) + '\')"><i class="fas fa-trash fa-xs"></i></button>' +
+        '</div></div>' +
+        '<h6 class="mb-1">' + escapeHtml(card.name) + '</h6>' +
+        '<h5 class="fw-bold mb-0 card-balance" data-card-id="' + card.id + '">¥' + card.balance + '</h5>' +
+        '</div></div>');
+    if (!document.getElementById('expense-form')) location.reload();
 }
 
 function updateCardInDOM(card) {
@@ -374,86 +338,61 @@ function updateCardInDOM(card) {
     if (el) {
         el.querySelector('h6').textContent = card.name;
         el.querySelector('.card-balance').textContent = '¥' + card.balance;
-        const iconEl = el.querySelector('.fa-lg');
-        iconEl.className = iconEl.className.replace(/fa-[a-z-]+/, card.icon);
+        el.querySelector('.fa-lg').className = el.querySelector('.fa-lg').className.replace(/fa-[a-z-]+/, card.icon);
     }
 }
 
-// ============ 删除确认 Modal ============
+// ============ 删除 Modal ============
 const deleteModal = new bootstrap.Modal(document.getElementById('deleteModal'));
-let deleteTarget = null; // { type: 'card'|'expense', pk, name }
+let deleteTarget = null;
 
 document.getElementById('delete-confirm-btn').addEventListener('click', async function() {
     if (!deleteTarget) return;
-    const btn = this;
-    btn.disabled = true;
-    btn.innerHTML = '<i class="fas fa-spinner fa-spin me-1"></i>删除中...';
-
-    let url;
-    if (deleteTarget.type === 'card') {
-        url = '/cards/' + deleteTarget.pk + '/delete/';
-    } else {
-        url = '/expenses/' + deleteTarget.pk + '/delete/';
-    }
-
+    const btn = this; btn.disabled = true; btn.innerHTML = '<i class="fas fa-spinner fa-spin me-1"></i>删除中...';
+    const url = deleteTarget.type === 'card' ? '/cards/' + deleteTarget.pk + '/delete/' : '/expenses/' + deleteTarget.pk + '/delete/';
     try {
         const resp = await fetch(url, {
             method: 'POST',
             headers: { 'X-Requested-With': 'XMLHttpRequest', 'X-CSRFToken': getCSRF() },
         });
         const data = await resp.json();
-
         if (data.success) {
             if (deleteTarget.type === 'card') {
                 document.getElementById('card-' + deleteTarget.pk)?.remove();
                 updateStats(data);
-                if (!document.querySelector('#bank-cards-list .col-md-6')) {
-                    document.getElementById('bank-cards-list').innerHTML = `
-                        <div class="text-center py-4 text-muted" id="no-cards-msg">
-                            <i class="fas fa-credit-card fa-3x mb-2 opacity-25"></i>
-                            <p class="mb-0">还没有银行卡，点击"添加"开始使用</p>
-                        </div>`;
+                if (!document.querySelector('#bank-cards-list .col-6')) {
+                    document.getElementById('bank-cards-list').innerHTML =
+                        '<div class="text-center py-4 text-muted" id="no-cards-msg"><i class="fas fa-credit-card fa-3x mb-2 opacity-25"></i><p class="mb-0">还没有银行卡</p></div>';
                     location.reload();
                 }
             } else {
                 document.getElementById('expense-' + deleteTarget.pk)?.remove();
                 updateStats(data);
-                const cardBalanceEl = document.querySelector('.card-balance[data-card-id]');
-                if (cardBalanceEl && data.balance) {
-                    cardBalanceEl.textContent = '¥' + data.balance;
-                }
+                const ce = document.querySelector('.card-balance[data-card-id]');
+                if (ce && data.balance) ce.textContent = '¥' + data.balance;
                 if (!document.querySelector('#expenses-list .expense-item')) {
-                    document.getElementById('expenses-list').innerHTML = `
-                        <div class="text-center py-4 text-muted" id="expenses-empty">
-                            <p class="mb-0">还没有消费记录</p>
-                        </div>`;
+                    document.getElementById('expenses-list').innerHTML =
+                        '<div class="text-center py-4 text-muted" id="expenses-empty"><i class="fas fa-receipt fa-3x mb-2 opacity-25"></i><p class="mb-0">还没有记录</p></div>';
                 }
             }
             deleteModal.hide();
-        } else {
-            alert(data.error || '删除失败');
-        }
-    } catch (err) {
-        alert('网络错误，请重试');
-    } finally {
-        btn.disabled = false;
-        btn.innerHTML = '<i class="fas fa-trash me-1"></i>确认删除';
-    }
+        } else { alert(data.error || '删除失败'); }
+    } catch (err) { alert('网络错误'); }
+    finally { btn.disabled = false; btn.innerHTML = '<i class="fas fa-trash me-1"></i>确认删除'; }
 });
 
 function openDeleteCardModal(pk, name) {
-    deleteTarget = { type: 'card', pk, name };
-    document.getElementById('delete-message').textContent = '确定要删除银行卡"' + name + '"吗？此操作无法撤销。';
+    deleteTarget = { type: 'card', pk: pk, name: name };
+    document.getElementById('delete-message').textContent = '确定要删除"' + name + '"吗？此操作无法撤销。';
     deleteModal.show();
 }
-
 function openDeleteExpenseModal(pk) {
-    deleteTarget = { type: 'expense', pk };
-    document.getElementById('delete-message').textContent = '确定要删除这条消费记录吗？余额会自动恢复。';
+    deleteTarget = { type: 'expense', pk: pk };
+    document.getElementById('delete-message').textContent = '确定要删除这条记录吗？余额会自动调整。';
     deleteModal.show();
 }
 
-// ============ 快速记账 AJAX ============
+// ============ 快速记录 AJAX ============
 {% if bank_cards %}
 (function() {
     const form = document.getElementById('expense-form');
@@ -464,11 +403,8 @@ function openDeleteExpenseModal(pk) {
 
     form.addEventListener('submit', async function(e) {
         e.preventDefault();
-        submitBtn.disabled = true;
-        submitBtn.innerHTML = '<i class="fas fa-spinner fa-spin me-1"></i>提交中...';
-        msgDiv.style.display = 'none';
-        clearFieldErrors();
-
+        submitBtn.disabled = true; submitBtn.innerHTML = '<i class="fas fa-spinner fa-spin me-1"></i>提交中...';
+        msgDiv.style.display = 'none'; clearFieldErrors();
         try {
             const resp = await fetch(form.action, {
                 method: 'POST',
@@ -476,68 +412,53 @@ function openDeleteExpenseModal(pk) {
                 body: new FormData(form),
             });
             const data = await resp.json();
-
             if (data.success) {
                 updateStats(data);
                 const cardId = form.querySelector('[name="bank_card"]').value;
                 const el = document.querySelector('.card-balance[data-card-id="' + cardId + '"]');
                 if (el) el.textContent = '¥' + data.balance;
-                prependExpense();
+                prependRecord(data);
                 form.reset();
                 if (dateInput) dateInput.valueAsDate = new Date();
-                showMsg('success', '记账成功！');
+                showMsg('success', '记录成功！');
             } else {
                 if (data.errors) showFieldErrors(data.errors);
-                showMsg('danger', data.error || '记账失败');
+                showMsg('danger', data.error || '记录失败');
             }
-        } catch (err) {
-            showMsg('danger', '网络错误');
-        } finally {
-            submitBtn.disabled = false;
-            submitBtn.innerHTML = '<i class="fas fa-check me-1"></i>记账';
-        }
+        } catch (err) { showMsg('danger', '网络错误'); }
+        finally { submitBtn.disabled = false; submitBtn.innerHTML = '<i class="fas fa-check me-1"></i>记录'; }
     });
 
-    function prependExpense() {
-        const list = document.getElementById('expenses-list');
+    function prependRecord(data) {
         document.getElementById('expenses-empty')?.remove();
         const fd = new FormData(form);
-        const html = `
-            <div class="expense-item">
-                <div class="d-flex justify-content-between align-items-center">
-                    <div>
-                        <div class="fw-semibold">${escapeHtml(fd.get('category'))}</div>
-                        <small class="text-muted">${escapeHtml(form.querySelector('[name="bank_card"] option:checked').textContent)} &bull; ${escapeHtml(fd.get('note') || '无备注')} &bull; ${escapeHtml(fd.get('expense_date'))}</small>
-                    </div>
-                    <div class="text-end">
-                        <div class="amount-negative fw-bold">-¥${escapeHtml(fd.get('amount'))}</div>
-                    </div>
-                </div>
-            </div>`;
-        list.insertAdjacentHTML('afterbegin', html);
+        const isIncome = fd.get('record_type') === 'income';
+        const sign = isIncome ? '+' : '-';
+        const cssClass = isIncome ? 'amount-positive' : 'amount-negative';
+        document.getElementById('expenses-list').insertAdjacentHTML('afterbegin',
+            '<div class="expense-item">' +
+            '<div class="d-flex justify-content-between align-items-center">' +
+            '<div><div class="fw-semibold">' + escapeHtml(fd.get('category')) + '</div>' +
+            '<small class="text-muted">' + escapeHtml(form.querySelector('[name="bank_card"] option:checked').textContent) + ' &bull; ' + escapeHtml(fd.get('note') || '无备注') + ' &bull; ' + escapeHtml(fd.get('expense_date')) + '</small></div>' +
+            '<div class="text-end"><div class="' + cssClass + ' fw-bold">' + sign + '¥' + escapeHtml(fd.get('amount')) + '</div></div>' +
+            '</div></div>');
     }
 
     function showMsg(type, text) {
-        msgDiv.style.display = 'block';
-        msgDiv.className = 'alert alert-' + type + ' py-2 mt-2';
-        msgDiv.textContent = text;
+        msgDiv.style.display = 'block'; msgDiv.className = 'alert alert-' + type + ' py-2 mt-2'; msgDiv.textContent = text;
     }
-
     function clearFieldErrors() {
         form.querySelectorAll('.field-error').forEach(el => el.remove());
         form.querySelectorAll('.is-invalid').forEach(el => el.classList.remove('is-invalid'));
     }
-
     function showFieldErrors(errors) {
         clearFieldErrors();
-        for (const [field, errs] of Object.entries(errors)) {
-            const input = form.querySelector('[name="' + field + '"]');
+        for (const [f, e] of Object.entries(errors)) {
+            const input = form.querySelector('[name="' + f + '"]');
             if (input) {
                 input.classList.add('is-invalid');
-                const div = document.createElement('div');
-                div.className = 'text-danger small mt-1 field-error';
-                div.textContent = errs.join(', ');
-                input.parentNode.appendChild(div);
+                const d = document.createElement('div'); d.className = 'text-danger small mt-1 field-error'; d.textContent = e.join(', ');
+                input.parentNode.appendChild(d);
             }
         }
     }

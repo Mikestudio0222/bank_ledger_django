@@ -30,6 +30,7 @@ class ExpenseFlowTests(TestCase):
             'amount': '25.50',
             'category': '餐饮',
             'note': 'lunch',
+            'record_type': 'expense',
             'expense_date': date.today().isoformat(),
         })
 
@@ -47,6 +48,7 @@ class ExpenseFlowTests(TestCase):
             'amount': '150.00',
             'category': '购物',
             'note': '',
+            'record_type': 'expense',
             'expense_date': date.today().isoformat(),
         })
 
@@ -61,6 +63,7 @@ class ExpenseFlowTests(TestCase):
             'bank_card': self.other_card.pk,
             'amount': '10.00',
             'category': '交通',
+            'record_type': 'expense',
             'note': '',
             'expense_date': date.today().isoformat(),
         })

@@ -55,12 +55,15 @@ class BankCardForm(forms.ModelForm):
 
 
 class ExpenseForm(forms.ModelForm):
-    """消费记录表单"""
+    """收支记录表单"""
     class Meta:
         model = Expense
-        fields = ['bank_card', 'amount', 'category', 'note', 'expense_date']
+        fields = ['bank_card', 'record_type', 'amount', 'category', 'note', 'expense_date']
         widgets = {
             'bank_card': forms.Select(attrs={
+                'class': 'form-select'
+            }),
+            'record_type': forms.Select(attrs={
                 'class': 'form-select'
             }),
             'amount': forms.NumberInput(attrs={

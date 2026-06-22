@@ -58,7 +58,7 @@ def register_view(request):
                 reverse('verify_email', kwargs={'token': token})
             )
             send_mail(
-                subject='验证你的邮箱 - 银行卡记账系统',
+                subject='验证你的邮箱 - 记账工具',
                 message=(
                     f'Hi {user.username},\n\n'
                     f'请点击以下链接验证你的邮箱地址（24小时内有效）：\n\n'
@@ -133,18 +133,24 @@ def _get_dashboard_context(user, expense_form=None):
     bank_cards = BankCard.objects.filter(user=user)
     total_balance = bank_cards.aggregate(total=Sum('balance'))['total'] or Decimal('0.00')
 
-    expenses = Expense.objects.filter(user=user).select_related('bank_card')
+    records = Expense.objects.filter(user=user).select_related('bank_card')
 
     today = timezone.now().date()
-    today_expenses = expenses.filter(expense_date=today)
-    today_total = today_expenses.aggregate(total=Sum('amount'))['total'] or Decimal('0.00')
-
     month_start = today.replace(day=1)
-    month_total = expenses.filter(expense_date__gte=month_start).aggregate(
-        total=Sum('amount')
-    )['total'] or Decimal('0.00')
 
-    total_records = expenses.count()
+    today_expenses = records.filter(expense_date=today, record_type='expense')
+    today_expense_total = today_expenses.aggregate(total=Sum('amount'))['total'] or Decimal('0.00')
+
+    today_income = records.filter(expense_date=today, record_type='income')
+    today_income_total = today_income.aggregate(total=Sum('amount'))['total'] or Decimal('0.00')
+
+    month_expenses = records.filter(expense_date__gte=month_start, record_type='expense')
+    month_expense_total = month_expenses.aggregate(total=Sum('amount'))['total'] or Decimal('0.00')
+
+    month_income = records.filter(expense_date__gte=month_start, record_type='income')
+    month_income_total = month_income.aggregate(total=Sum('amount'))['total'] or Decimal('0.00')
+
+    total_records = records.count()
 
     if expense_form is None:
         expense_form = ExpenseForm(user=user)
@@ -152,9 +158,11 @@ def _get_dashboard_context(user, expense_form=None):
     return {
         'bank_cards': bank_cards,
         'total_balance': total_balance,
-        'expenses': expenses[:20],
-        'today_total': today_total,
-        'month_total': month_total,
+        'expenses': records[:20],
+        'today_expense_total': today_expense_total,
+        'today_income_total': today_income_total,
+        'month_expense_total': month_expense_total,
+        'month_income_total': month_income_total,
         'total_records': total_records,
         'expense_form': expense_form,
     }
@@ -236,9 +244,9 @@ def delete_bank_card(request, pk):
             if is_ajax:
                 return JsonResponse({
                     'success': False,
-                    'error': '这张银行卡已有消费记录，请先删除相关记录后再删除银行卡。'
+                    'error': '这张银行卡已有收支记录，请先删除相关记录后再删除银行卡。'
                 }, status=400)
-            messages.error(request, '这张银行卡已有消费记录，请先处理相关记录后再删除。')
+            messages.error(request, '这张银行卡已有收支记录，请先处理相关记录后再删除。')
             return redirect('dashboard')
 
         bank_card.delete()
@@ -259,7 +267,7 @@ def delete_bank_card(request, pk):
 
 @login_required
 def add_expense(request):
-    """添加消费记录"""
+    """添加收支记录"""
     if request.method != 'POST':
         return redirect('dashboard')
 
@@ -268,6 +276,7 @@ def add_expense(request):
 
     if form.is_valid():
         amount = form.cleaned_data['amount']
+        record_type = form.cleaned_data['record_type']
 
         with transaction.atomic():
             bank_card = BankCard.objects.select_for_update().get(
@@ -275,7 +284,7 @@ def add_expense(request):
                 user=request.user,
             )
 
-            if bank_card.balance < amount:
+            if record_type == 'expense' and bank_card.balance < amount:
                 if is_ajax:
                     return JsonResponse({'success': False, 'error': '余额不足！'}, status=400)
                 messages.error(request, '余额不足！')
@@ -286,34 +295,39 @@ def add_expense(request):
             expense.user = request.user
             expense.bank_card = bank_card
 
-            bank_card.balance -= expense.amount
+            if record_type == 'expense':
+                bank_card.balance -= amount
+            else:
+                bank_card.balance += amount
             bank_card.save(update_fields=['balance', 'updated_at'])
             expense.save()
 
         if is_ajax:
-            # 计算更新后的统计
             today = timezone.now().date()
             month_start = today.replace(day=1)
-            user_expenses = Expense.objects.filter(user=request.user)
-            today_total = user_expenses.filter(expense_date=today).aggregate(
-                total=Sum('amount')
-            )['total'] or Decimal('0.00')
-            month_total = user_expenses.filter(expense_date__gte=month_start).aggregate(
-                total=Sum('amount')
-            )['total'] or Decimal('0.00')
-            total_records = user_expenses.count()
-
+            user_records = Expense.objects.filter(user=request.user)
             return JsonResponse({
                 'success': True,
+                'record_type': record_type,
                 'balance': str(bank_card.balance),
                 'total_balance': str(
                     BankCard.objects.filter(user=request.user).aggregate(
                         total=Sum('balance')
                     )['total'] or Decimal('0.00')
                 ),
-                'today_total': str(today_total),
-                'month_total': str(month_total),
-                'total_records': total_records,
+                'today_expense_total': str(user_records.filter(
+                    expense_date=today, record_type='expense'
+                ).aggregate(total=Sum('amount'))['total'] or Decimal('0.00')),
+                'today_income_total': str(user_records.filter(
+                    expense_date=today, record_type='income'
+                ).aggregate(total=Sum('amount'))['total'] or Decimal('0.00')),
+                'month_expense_total': str(user_records.filter(
+                    expense_date__gte=month_start, record_type='expense'
+                ).aggregate(total=Sum('amount'))['total'] or Decimal('0.00')),
+                'month_income_total': str(user_records.filter(
+                    expense_date__gte=month_start, record_type='income'
+                ).aggregate(total=Sum('amount'))['total'] or Decimal('0.00')),
+                'total_records': user_records.count(),
             })
         messages.success(request, '记账成功！')
         return redirect('dashboard')
@@ -330,7 +344,7 @@ def add_expense(request):
 
 @login_required
 def delete_expense(request, pk):
-    """删除消费记录（支持 AJAX）"""
+    """删除收支记录（支持 AJAX）"""
     expense = get_object_or_404(
         Expense.objects.select_related('bank_card'),
         pk=pk,
@@ -349,16 +363,19 @@ def delete_expense(request, pk):
                 pk=expense.bank_card_id,
                 user=request.user,
             )
-            restored_amount = expense.amount
 
-            bank_card.balance += restored_amount
+            # 恢复余额：支出则加回，收入则扣除
+            if expense.record_type == 'expense':
+                bank_card.balance += expense.amount
+            else:
+                bank_card.balance -= expense.amount
             bank_card.save(update_fields=['balance', 'updated_at'])
             expense.delete()
 
         if is_ajax:
             today = timezone.now().date()
             month_start = today.replace(day=1)
-            user_expenses = Expense.objects.filter(user=request.user)
+            user_records = Expense.objects.filter(user=request.user)
             return JsonResponse({
                 'success': True,
                 'balance': str(bank_card.balance),
@@ -367,13 +384,19 @@ def delete_expense(request, pk):
                         total=Sum('balance')
                     )['total'] or Decimal('0.00')
                 ),
-                'today_total': str(user_expenses.filter(expense_date=today).aggregate(
-                    total=Sum('amount')
-                )['total'] or Decimal('0.00')),
-                'month_total': str(user_expenses.filter(expense_date__gte=month_start).aggregate(
-                    total=Sum('amount')
-                )['total'] or Decimal('0.00')),
-                'total_records': user_expenses.count(),
+                'today_expense_total': str(user_records.filter(
+                    expense_date=today, record_type='expense'
+                ).aggregate(total=Sum('amount'))['total'] or Decimal('0.00')),
+                'today_income_total': str(user_records.filter(
+                    expense_date=today, record_type='income'
+                ).aggregate(total=Sum('amount'))['total'] or Decimal('0.00')),
+                'month_expense_total': str(user_records.filter(
+                    expense_date__gte=month_start, record_type='expense'
+                ).aggregate(total=Sum('amount'))['total'] or Decimal('0.00')),
+                'month_income_total': str(user_records.filter(
+                    expense_date__gte=month_start, record_type='income'
+                ).aggregate(total=Sum('amount'))['total'] or Decimal('0.00')),
+                'total_records': user_records.count(),
             })
 
         messages.success(request, '记录已删除，余额已恢复！')
@@ -384,7 +407,7 @@ def delete_expense(request, pk):
 
 @login_required
 def expenses_list(request):
-    """消费记录列表（支持无限滚动 AJAX）"""
+    """收支记录列表（支持无限滚动 AJAX）"""
     expenses = Expense.objects.filter(user=request.user).select_related('bank_card')
 
     category = request.GET.get('category')
@@ -402,6 +425,7 @@ def expenses_list(request):
             'id': e.pk,
             'category': e.category,
             'amount': str(e.amount),
+            'record_type': e.record_type,
             'bank_card_name': e.bank_card.name,
             'note': e.note or '',
             'expense_date': str(e.expense_date),

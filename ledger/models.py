@@ -30,7 +30,12 @@ class BankCard(models.Model):
 
 
 class Expense(models.Model):
-    """消费记录模型"""
+    """收支记录模型"""
+    TYPE_CHOICES = [
+        ('expense', '支出'),
+        ('income', '收入'),
+    ]
+
     CATEGORY_CHOICES = [
         ('餐饮', '🍜 餐饮'),
         ('购物', '🛍️ 购物'),
@@ -39,11 +44,13 @@ class Expense(models.Model):
         ('医疗', '💊 医疗'),
         ('教育', '📚 教育'),
         ('住房', '🏠 住房'),
+        ('薪资', '💰 薪资'),
         ('其他', '📦 其他'),
     ]
 
     user = models.ForeignKey(User, on_delete=models.CASCADE, related_name='expenses', verbose_name='用户')
     bank_card = models.ForeignKey(BankCard, on_delete=models.CASCADE, related_name='expenses', verbose_name='银行卡')
+    record_type = models.CharField(max_length=10, choices=TYPE_CHOICES, default='expense', db_index=True, verbose_name='类型')
     amount = models.DecimalField(
         max_digits=10,
         decimal_places=2,
@@ -52,14 +59,15 @@ class Expense(models.Model):
     )
     category = models.CharField(max_length=20, choices=CATEGORY_CHOICES, db_index=True, verbose_name='分类')
     note = models.CharField(max_length=200, blank=True, verbose_name='备注')
-    expense_date = models.DateField(db_index=True, verbose_name='消费日期')
+    expense_date = models.DateField(db_index=True, verbose_name='日期')
     created_at = models.DateTimeField(auto_now_add=True, verbose_name='创建时间')
 
     class Meta:
         db_table = 'expenses'
-        verbose_name = '消费记录'
-        verbose_name_plural = '消费记录'
+        verbose_name = '收支记录'
+        verbose_name_plural = '收支记录'
         ordering = ['-expense_date', '-created_at']
 
     def __str__(self):
-        return f"{self.user.username} - {self.category} - ¥{self.amount}"
+        sign = '-' if self.record_type == 'expense' else '+'
+        return f"{self.user.username} - {self.category} - {sign}¥{self.amount}"

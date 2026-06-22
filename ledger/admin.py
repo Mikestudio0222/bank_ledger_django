@@ -12,8 +12,8 @@ class BankCardAdmin(admin.ModelAdmin):
 
 @admin.register(Expense)
 class ExpenseAdmin(admin.ModelAdmin):
-    list_display = ['user', 'bank_card', 'amount', 'category', 'expense_date', 'created_at']
-    list_filter = ['category', 'expense_date', 'user']
+    list_display = ['user', 'bank_card', 'record_type', 'amount', 'category', 'expense_date', 'created_at']
+    list_filter = ['record_type', 'category', 'expense_date', 'user']
     search_fields = ['note', 'user__username']
     readonly_fields = ['created_at']
     date_hierarchy = 'expense_date'
