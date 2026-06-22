@@ -17,23 +17,25 @@
         <div id="expenses-list">
         {% if expenses %}
             {% for record in expenses %}
-            <div class="expense-item" id="expense-{{ record.pk }}">
-                <div class="d-flex justify-content-between align-items-center">
-                    <div>
-                        <div class="fw-semibold">{{ record.category }}</div>
-                        <small class="text-muted">
-                            {{ record.bank_card.name }} &bull; {{ record.note|default:"无备注" }} &bull; {{ record.expense_date }}
-                        </small>
-                    </div>
-                    <div class="text-end">
-                        {% if record.record_type == 'income' %}
-                        <div class="amount-positive fw-bold">+¥{{ record.amount }}</div>
-                        {% else %}
-                        <div class="amount-negative fw-bold">-¥{{ record.amount }}</div>
-                        {% endif %}
-                        <button class="btn btn-sm btn-outline-danger mt-1" onclick="openDeleteExpenseModal({{ record.pk }})" title="删除">
-                            <i class="fas fa-trash fa-xs"></i>
-                        </button>
+            <div class="swipe-container" id="expense-{{ record.pk }}">
+                <div class="swipe-bg" onclick="openDeleteExpenseModal({{ record.pk }})">
+                    <i class="fas fa-trash"></i>
+                </div>
+                <div class="swipe-content" data-expense-id="{{ record.pk }}">
+                    <div class="d-flex justify-content-between align-items-center">
+                        <div>
+                            <div class="fw-semibold">{{ record.category }}</div>
+                            <small class="text-muted">
+                                {{ record.bank_card.name }} &bull; {{ record.note|default:"无备注" }} &bull; {{ record.expense_date }}
+                            </small>
+                        </div>
+                        <div class="text-end">
+                            {% if record.record_type == 'income' %}
+                            <div class="amount-positive fw-bold">+¥{{ record.amount }}</div>
+                            {% else %}
+                            <div class="amount-negative fw-bold">-¥{{ record.amount }}</div>
+                            {% endif %}
+                        </div>
                     </div>
                 </div>
             </div>
@@ -45,6 +47,9 @@
         </div>
         {% endif %}
         </div>
+        <small class="text-muted" id="swipe-hint" style="{% if not expenses %}display:none;{% endif %}">
+            <i class="fas fa-hand-point-left me-1"></i>左滑条目可删除
+        </small>
     </div>
 </div>
 
@@ -128,28 +133,16 @@
         <h2 class="fw-bold amount-positive mb-3" id="total-balance">¥{{ total_balance }}</h2>
         <div class="row g-2">
             <div class="col-3">
-                <div class="stat-card today shadow-sm">
-                    <small>今日支出</small>
-                    <h6 class="fw-bold mb-0" id="today-expense">¥{{ today_expense_total }}</h6>
-                </div>
+                <div class="stat-card today shadow-sm"><small>今日支出</small><h6 class="fw-bold mb-0" id="today-expense">¥{{ today_expense_total }}</h6></div>
             </div>
             <div class="col-3">
-                <div class="stat-card" style="background:linear-gradient(135deg,#198754,#22c55e);">
-                    <small>今日收入</small>
-                    <h6 class="fw-bold mb-0" id="today-income">¥{{ today_income_total }}</h6>
-                </div>
+                <div class="stat-card" style="background:linear-gradient(135deg,#198754,#22c55e);"><small>今日收入</small><h6 class="fw-bold mb-0" id="today-income">¥{{ today_income_total }}</h6></div>
             </div>
             <div class="col-3">
-                <div class="stat-card month shadow-sm">
-                    <small>本月支出</small>
-                    <h6 class="fw-bold mb-0" id="month-expense">¥{{ month_expense_total }}</h6>
-                </div>
+                <div class="stat-card month shadow-sm"><small>本月支出</small><h6 class="fw-bold mb-0" id="month-expense">¥{{ month_expense_total }}</h6></div>
             </div>
             <div class="col-3">
-                <div class="stat-card" style="background:linear-gradient(135deg,#198754,#22c55e);">
-                    <small>本月收入</small>
-                    <h6 class="fw-bold mb-0" id="month-income">¥{{ month_income_total }}</h6>
-                </div>
+                <div class="stat-card" style="background:linear-gradient(135deg,#198754,#22c55e);"><small>本月收入</small><h6 class="fw-bold mb-0" id="month-income">¥{{ month_income_total }}</h6></div>
             </div>
         </div>
     </div>
@@ -160,10 +153,7 @@
     <div class="modal-dialog modal-dialog-centered">
         <div class="modal-content">
             <form id="card-form">
-                <div class="modal-header">
-                    <h5 class="modal-title" id="card-modal-title">添加银行卡</h5>
-                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
-                </div>
+                <div class="modal-header"><h5 class="modal-title" id="card-modal-title">添加银行卡</h5><button type="button" class="btn-close" data-bs-dismiss="modal"></button></div>
                 <div class="modal-body">
                     <div class="mb-3">
                         <label class="form-label">卡片名称</label>
@@ -206,9 +196,61 @@
 
 {% block extra_js %}
 <script>
+// ============ 左滑删除引擎 ============
+let swipeState = { el: null, startX: 0, startY: 0, offset: 0, openEl: null };
+
+function closeOpenSwipe() {
+    if (swipeState.openEl) {
+        swipeState.openEl.classList.remove('swiped');
+        swipeState.openEl.style.transform = '';
+        swipeState.openEl = null;
+    }
+}
+
+document.addEventListener('touchstart', function(e) {
+    const content = e.target.closest('.swipe-content');
+    if (!content) return;
+    swipeState.el = content;
+    swipeState.startX = e.touches[0].clientX;
+    swipeState.startY = e.touches[0].clientY;
+    swipeState.offset = content.classList.contains('swiped') ? -80 : 0;
+    content.style.transition = 'none';
+}, { passive: true });
+
+document.addEventListener('touchmove', function(e) {
+    if (!swipeState.el) return;
+    const dx = e.touches[0].clientX - swipeState.startX;
+    const dy = e.touches[0].clientY - swipeState.startY;
+    if (Math.abs(dy) > Math.abs(dx)) { swipeState.el = null; return; } // 垂直滚动优先
+    const newOffset = Math.min(0, Math.max(-80, swipeState.offset + dx));
+    swipeState.el.style.transform = 'translateX(' + newOffset + 'px)';
+}, { passive: true });
+
+document.addEventListener('touchend', function() {
+    if (!swipeState.el) return;
+    swipeState.el.style.transition = '';
+    const current = parseFloat(swipeState.el.style.transform.replace('translateX(','').replace('px)','')) || 0;
+    if (current < -30) {
+        closeOpenSwipe();
+        swipeState.el.classList.add('swiped');
+        swipeState.el.style.transform = '';
+        swipeState.openEl = swipeState.el;
+    } else {
+        swipeState.el.classList.remove('swiped');
+        swipeState.el.style.transform = '';
+    }
+    swipeState.el = null;
+});
+
+// 点击非删除区域时关闭已打开的滑动
+document.addEventListener('click', function(e) {
+    if (!e.target.closest('.swipe-bg') && !e.target.closest('.swipe-content')) {
+        closeOpenSwipe();
+    }
+});
+
 // ============ 余额显隐 ============
 let balanceVisible = true;
-
 function toggleBalance() {
     balanceVisible = !balanceVisible;
     const el = document.getElementById('total-balance');
@@ -241,7 +283,12 @@ function updateStats(data) {
     if (data.today_income_total !== undefined) document.getElementById('today-income').textContent = '¥' + data.today_income_total;
     if (data.month_expense_total !== undefined) document.getElementById('month-expense').textContent = '¥' + data.month_expense_total;
     if (data.month_income_total !== undefined) document.getElementById('month-income').textContent = '¥' + data.month_income_total;
-    if (data.total_records !== undefined) document.getElementById('total-records')?.remove();
+}
+
+// ============ 删除动画 ============
+function animateRemove(el, callback) {
+    el.classList.add('removing');
+    setTimeout(callback, 350);
 }
 
 // ============ 银行卡 Modal ============
@@ -357,25 +404,37 @@ document.getElementById('delete-confirm-btn').addEventListener('click', async fu
         });
         const data = await resp.json();
         if (data.success) {
+            deleteModal.hide();
             if (deleteTarget.type === 'card') {
-                document.getElementById('card-' + deleteTarget.pk)?.remove();
-                updateStats(data);
-                if (!document.querySelector('#bank-cards-list .col-6')) {
-                    document.getElementById('bank-cards-list').innerHTML =
-                        '<div class="text-center py-4 text-muted" id="no-cards-msg"><i class="fas fa-credit-card fa-3x mb-2 opacity-25"></i><p class="mb-0">还没有银行卡</p></div>';
-                    location.reload();
+                const el = document.getElementById('card-' + deleteTarget.pk);
+                if (el) {
+                    animateRemove(el, () => {
+                        el.remove();
+                        updateStats(data);
+                        if (!document.querySelector('#bank-cards-list .col-6')) {
+                            document.getElementById('bank-cards-list').innerHTML =
+                                '<div class="text-center py-4 text-muted" id="no-cards-msg"><i class="fas fa-credit-card fa-3x mb-2 opacity-25"></i><p class="mb-0">还没有银行卡</p></div>';
+                            location.reload();
+                        }
+                    });
                 }
             } else {
-                document.getElementById('expense-' + deleteTarget.pk)?.remove();
-                updateStats(data);
-                const ce = document.querySelector('.card-balance[data-card-id]');
-                if (ce && data.balance) ce.textContent = '¥' + data.balance;
-                if (!document.querySelector('#expenses-list .expense-item')) {
-                    document.getElementById('expenses-list').innerHTML =
-                        '<div class="text-center py-4 text-muted" id="expenses-empty"><i class="fas fa-receipt fa-3x mb-2 opacity-25"></i><p class="mb-0">还没有记录</p></div>';
+                const el = document.getElementById('expense-' + deleteTarget.pk);
+                if (el) {
+                    closeOpenSwipe();
+                    animateRemove(el, () => {
+                        el.remove();
+                        updateStats(data);
+                        const ce = document.querySelector('.card-balance[data-card-id]');
+                        if (ce && data.balance) ce.textContent = '¥' + data.balance;
+                        if (!document.querySelector('#expenses-list .swipe-container')) {
+                            document.getElementById('expenses-list').innerHTML =
+                                '<div class="text-center py-4 text-muted" id="expenses-empty"><i class="fas fa-receipt fa-3x mb-2 opacity-25"></i><p class="mb-0">还没有记录</p></div>';
+                            document.getElementById('swipe-hint').style.display = 'none';
+                        }
+                    });
                 }
             }
-            deleteModal.hide();
         } else { alert(data.error || '删除失败'); }
     } catch (err) { alert('网络错误'); }
     finally { btn.disabled = false; btn.innerHTML = '<i class="fas fa-trash me-1"></i>确认删除'; }
@@ -431,17 +490,20 @@ function openDeleteExpenseModal(pk) {
 
     function prependRecord(data) {
         document.getElementById('expenses-empty')?.remove();
+        document.getElementById('swipe-hint').style.display = '';
         const fd = new FormData(form);
         const isIncome = fd.get('record_type') === 'income';
         const sign = isIncome ? '+' : '-';
         const cssClass = isIncome ? 'amount-positive' : 'amount-negative';
         document.getElementById('expenses-list').insertAdjacentHTML('afterbegin',
-            '<div class="expense-item">' +
+            '<div class="swipe-container">' +
+            '<div class="swipe-bg" onclick="openDeleteExpenseModal(null)"><i class="fas fa-trash"></i></div>' +
+            '<div class="swipe-content">' +
             '<div class="d-flex justify-content-between align-items-center">' +
             '<div><div class="fw-semibold">' + escapeHtml(fd.get('category')) + '</div>' +
             '<small class="text-muted">' + escapeHtml(form.querySelector('[name="bank_card"] option:checked').textContent) + ' &bull; ' + escapeHtml(fd.get('note') || '无备注') + ' &bull; ' + escapeHtml(fd.get('expense_date')) + '</small></div>' +
             '<div class="text-end"><div class="' + cssClass + ' fw-bold">' + sign + '¥' + escapeHtml(fd.get('amount')) + '</div></div>' +
-            '</div></div>');
+            '</div></div></div>');
     }
 
     function showMsg(type, text) {

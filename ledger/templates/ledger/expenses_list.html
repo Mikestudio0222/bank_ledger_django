@@ -12,7 +12,6 @@
             </a>
         </div>
 
-        <!-- 分类筛选 -->
         <div class="mb-3">
             <div class="d-flex flex-wrap gap-1">
                 <a href="?category=" class="btn btn-sm {% if not selected_category %}btn-primary{% else %}btn-outline-primary{% endif %}">全部</a>
@@ -24,24 +23,26 @@
 
         <div id="expenses-list">
         {% if page_obj %}
-            {% for expense in page_obj %}
-            <div class="expense-item" id="expense-{{ expense.pk }}">
-                <div class="d-flex justify-content-between align-items-center">
-                    <div>
-                        <div class="fw-semibold">{{ expense.category }}</div>
-                        <small class="text-muted">
-                            {{ expense.bank_card.name }} &bull; {{ expense.note|default:"无备注" }} &bull; {{ expense.expense_date }}
-                        </small>
-                    </div>
-                    <div class="text-end">
-                        {% if expense.record_type == 'income' %}
-                        <div class="amount-positive fw-bold">+¥{{ expense.amount }}</div>
-                        {% else %}
-                        <div class="amount-negative fw-bold">-¥{{ expense.amount }}</div>
-                        {% endif %}
-                        <button class="btn btn-sm btn-outline-danger mt-1" onclick="openDeleteExpenseModal({{ expense.pk }})" title="删除">
-                            <i class="fas fa-trash fa-xs"></i>
-                        </button>
+            {% for record in page_obj %}
+            <div class="swipe-container" id="expense-{{ record.pk }}">
+                <div class="swipe-bg" onclick="openDeleteExpenseModal({{ record.pk }})">
+                    <i class="fas fa-trash"></i>
+                </div>
+                <div class="swipe-content" data-expense-id="{{ record.pk }}">
+                    <div class="d-flex justify-content-between align-items-center">
+                        <div>
+                            <div class="fw-semibold">{{ record.category }}</div>
+                            <small class="text-muted">
+                                {{ record.bank_card.name }} &bull; {{ record.note|default:"无备注" }} &bull; {{ record.expense_date }}
+                            </small>
+                        </div>
+                        <div class="text-end">
+                            {% if record.record_type == 'income' %}
+                            <div class="amount-positive fw-bold">+¥{{ record.amount }}</div>
+                            {% else %}
+                            <div class="amount-negative fw-bold">-¥{{ record.amount }}</div>
+                            {% endif %}
+                        </div>
                     </div>
                 </div>
             </div>
@@ -62,22 +63,14 @@
     </div>
 </div>
 
-{# ———— 删除确认 Modal ———— #}
 <div class="modal fade" id="deleteModal" tabindex="-1">
     <div class="modal-dialog modal-dialog-centered modal-sm">
         <div class="modal-content">
-            <div class="modal-header">
-                <h5 class="modal-title">确认删除</h5>
-                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
-            </div>
-            <div class="modal-body">
-                <p>确定要删除这条消费记录吗？余额会自动恢复。</p>
-            </div>
+            <div class="modal-header"><h5 class="modal-title">确认删除</h5><button type="button" class="btn-close" data-bs-dismiss="modal"></button></div>
+            <div class="modal-body"><p>确定要删除这条记录吗？余额会自动调整。</p></div>
             <div class="modal-footer">
                 <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">取消</button>
-                <button type="button" class="btn btn-danger" id="delete-confirm-btn">
-                    <i class="fas fa-trash me-1"></i>确认删除
-                </button>
+                <button type="button" class="btn btn-danger" id="delete-confirm-btn"><i class="fas fa-trash me-1"></i>确认删除</button>
             </div>
         </div>
     </div>
@@ -86,55 +79,93 @@
 
 {% block extra_js %}
 <script>
-function escapeHtml(text) {
-    const div = document.createElement('div');
-    div.textContent = text;
-    return div.innerHTML;
+// ============ 左滑引擎 ============
+let swipeState = { el: null, startX: 0, startY: 0, offset: 0, openEl: null };
+
+function closeOpenSwipe() {
+    if (swipeState.openEl) {
+        swipeState.openEl.classList.remove('swiped');
+        swipeState.openEl.style.transform = '';
+        swipeState.openEl = null;
+    }
 }
 
-function getCSRF() {
-    return document.querySelector('[name=csrfmiddlewaretoken]').value;
-}
+document.addEventListener('touchstart', function(e) {
+    const content = e.target.closest('.swipe-content');
+    if (!content) return;
+    swipeState.el = content;
+    swipeState.startX = e.touches[0].clientX;
+    swipeState.startY = e.touches[0].clientY;
+    swipeState.offset = content.classList.contains('swiped') ? -80 : 0;
+    content.style.transition = 'none';
+}, { passive: true });
 
-// ============ 删除 Modal ============
+document.addEventListener('touchmove', function(e) {
+    if (!swipeState.el) return;
+    const dx = e.touches[0].clientX - swipeState.startX;
+    const dy = e.touches[0].clientY - swipeState.startY;
+    if (Math.abs(dy) > Math.abs(dx)) { swipeState.el = null; return; }
+    const newOffset = Math.min(0, Math.max(-80, swipeState.offset + dx));
+    swipeState.el.style.transform = 'translateX(' + newOffset + 'px)';
+}, { passive: true });
+
+document.addEventListener('touchend', function() {
+    if (!swipeState.el) return;
+    swipeState.el.style.transition = '';
+    const current = parseFloat(swipeState.el.style.transform.replace('translateX(','').replace('px)','')) || 0;
+    if (current < -30) {
+        closeOpenSwipe();
+        swipeState.el.classList.add('swiped');
+        swipeState.el.style.transform = '';
+        swipeState.openEl = swipeState.el;
+    } else {
+        swipeState.el.classList.remove('swiped');
+        swipeState.el.style.transform = '';
+    }
+    swipeState.el = null;
+});
+
+document.addEventListener('click', function(e) {
+    if (!e.target.closest('.swipe-bg') && !e.target.closest('.swipe-content')) closeOpenSwipe();
+});
+
+// ============ 辅助 ============
+function escapeHtml(t) { const d = document.createElement('div'); d.textContent = t; return d.innerHTML; }
+function getCSRF() { return document.querySelector('[name=csrfmiddlewaretoken]').value; }
+function animateRemove(el, cb) { el.classList.add('removing'); setTimeout(cb, 350); }
+
+// ============ 删除 ============
 const deleteModal = new bootstrap.Modal(document.getElementById('deleteModal'));
 let deletePk = null;
 
 document.getElementById('delete-confirm-btn').addEventListener('click', async function() {
     if (!deletePk) return;
-    const btn = this;
-    btn.disabled = true;
-    btn.innerHTML = '<i class="fas fa-spinner fa-spin me-1"></i>删除中...';
-
+    const btn = this; btn.disabled = true; btn.innerHTML = '<i class="fas fa-spinner fa-spin me-1"></i>删除中...';
     try {
         const resp = await fetch('/expenses/' + deletePk + '/delete/', {
             method: 'POST',
             headers: { 'X-Requested-With': 'XMLHttpRequest', 'X-CSRFToken': getCSRF() },
         });
         const data = await resp.json();
-
         if (data.success) {
-            document.getElementById('expense-' + deletePk)?.remove();
-            if (!document.querySelector('#expenses-list .expense-item')) {
-                document.getElementById('expenses-list').innerHTML = '<div class="text-center py-5 text-muted"><p>没有找到消费记录</p></div>';
-                document.getElementById('scroll-sentinel').style.display = 'none';
-            }
             deleteModal.hide();
-        } else {
-            alert(data.error || '删除失败');
-        }
-    } catch (err) {
-        alert('网络错误，请重试');
-    } finally {
-        btn.disabled = false;
-        btn.innerHTML = '<i class="fas fa-trash me-1"></i>确认删除';
-    }
+            const el = document.getElementById('expense-' + deletePk);
+            if (el) {
+                closeOpenSwipe();
+                animateRemove(el, () => {
+                    el.remove();
+                    if (!document.querySelector('#expenses-list .swipe-container')) {
+                        document.getElementById('expenses-list').innerHTML = '<div class="text-center py-5 text-muted"><p>没有找到记录</p></div>';
+                        document.getElementById('scroll-sentinel').style.display = 'none';
+                    }
+                });
+            }
+        } else { alert(data.error || '删除失败'); }
+    } catch (err) { alert('网络错误'); }
+    finally { btn.disabled = false; btn.innerHTML = '<i class="fas fa-trash me-1"></i>确认删除'; }
 });
 
-function openDeleteExpenseModal(pk) {
-    deletePk = pk;
-    deleteModal.show();
-}
+function openDeleteExpenseModal(pk) { deletePk = pk; deleteModal.show(); }
 
 // ============ 无限滚动 ============
 (function() {
@@ -156,57 +187,36 @@ function openDeleteExpenseModal(pk) {
     if (hasNext) observer.observe(sentinel);
 
     async function loadMore() {
-        loading = true;
-        loadingEl.style.display = 'block';
-        currentPage++;
-
+        loading = true; loadingEl.style.display = 'block'; currentPage++;
         const params = new URLSearchParams({ page: currentPage });
         if (selectedCategory) params.set('category', selectedCategory);
-
         try {
-            const resp = await fetch('?' + params.toString(), {
-                headers: { 'X-Requested-With': 'XMLHttpRequest' },
-            });
+            const resp = await fetch('?' + params.toString(), { headers: { 'X-Requested-With': 'XMLHttpRequest' } });
             const data = await resp.json();
-
             if (data.items && data.items.length > 0) {
                 const fragment = document.createDocumentFragment();
                 data.items.forEach(function(item) {
                     const div = document.createElement('div');
-                    div.className = 'expense-item';
+                    div.className = 'swipe-container';
                     div.id = 'expense-' + item.id;
                     const isIncome = item.record_type === 'income';
                     const sign = isIncome ? '+' : '-';
                     const cssClass = isIncome ? 'amount-positive' : 'amount-negative';
-                    div.innerHTML = `
-                        <div class="d-flex justify-content-between align-items-center">
-                            <div>
-                                <div class="fw-semibold">${escapeHtml(item.category)}</div>
-                                <small class="text-muted">${escapeHtml(item.bank_card_name)} &bull; ${escapeHtml(item.note || '无备注')} &bull; ${escapeHtml(item.expense_date)}</small>
-                            </div>
-                            <div class="text-end">
-                                <div class="${cssClass} fw-bold">${sign}¥${escapeHtml(item.amount)}</div>
-                                <button class="btn btn-sm btn-outline-danger mt-1" onclick="openDeleteExpenseModal(${item.id})" title="删除">
-                                    <i class="fas fa-trash fa-xs"></i>
-                                </button>
-                            </div>
-                        </div>`;
+                    div.innerHTML =
+                        '<div class="swipe-bg" onclick="openDeleteExpenseModal(' + item.id + ')"><i class="fas fa-trash"></i></div>' +
+                        '<div class="swipe-content" data-expense-id="' + item.id + '">' +
+                        '<div class="d-flex justify-content-between align-items-center">' +
+                        '<div><div class="fw-semibold">' + escapeHtml(item.category) + '</div>' +
+                        '<small class="text-muted">' + escapeHtml(item.bank_card_name) + ' &bull; ' + escapeHtml(item.note || '无备注') + ' &bull; ' + escapeHtml(item.expense_date) + '</small></div>' +
+                        '<div class="text-end"><div class="' + cssClass + ' fw-bold">' + sign + '¥' + escapeHtml(item.amount) + '</div></div>' +
+                        '</div></div>';
                     fragment.appendChild(div);
                 });
                 listEl.appendChild(fragment);
             }
-
-            if (!data.has_next) {
-                observer.unobserve(sentinel);
-                sentinel.style.display = 'none';
-                endMsg.style.display = 'block';
-            }
-        } catch (err) {
-            currentPage--;
-        } finally {
-            loading = false;
-            loadingEl.style.display = 'none';
-        }
+            if (!data.has_next) { observer.unobserve(sentinel); sentinel.style.display = 'none'; endMsg.style.display = 'block'; }
+        } catch (err) { currentPage--; }
+        finally { loading = false; loadingEl.style.display = 'none'; }
     }
 })();
 </script>
