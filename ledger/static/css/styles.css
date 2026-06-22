@@ -1,0 +1,143 @@
+:root {
+    --primary-color: #0d6efd;
+    --success-color: #198754;
+    --danger-color: #dc3545;
+    --warning-color: #ffc107;
+    --gradient-bg: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+}
+
+body {
+    background: var(--gradient-bg);
+    min-height: 100vh;
+    font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+}
+
+.navbar {
+    background: rgba(255, 255, 255, 0.95) !important;
+    backdrop-filter: blur(10px);
+    box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+}
+
+.card {
+    border: none;
+    border-radius: 16px;
+    box-shadow: 0 4px 20px rgba(0,0,0,0.1);
+    background: rgba(255, 255, 255, 0.95);
+    backdrop-filter: blur(10px);
+}
+
+.card:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 6px 24px rgba(0,0,0,0.15);
+    transition: all 0.3s ease;
+}
+
+.bank-card {
+    background: linear-gradient(135deg, #0d6efd 0%, #4c9aff 100%);
+    color: white;
+    border-radius: 16px;
+    padding: 24px;
+    min-height: 160px;
+}
+
+.btn-primary {
+    background: linear-gradient(135deg, #0d6efd 0%, #4c9aff 100%);
+    border: none;
+    border-radius: 10px;
+    padding: 10px 24px;
+    font-weight: 500;
+}
+
+.btn-primary:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 4px 12px rgba(13, 110, 253, 0.4);
+}
+
+.btn-success {
+    background: linear-gradient(135deg, #198754 0%, #22c55e 100%);
+    border: none;
+    border-radius: 10px;
+}
+
+.btn-danger {
+    background: linear-gradient(135deg, #dc3545 0%, #ef4444 100%);
+    border: none;
+    border-radius: 10px;
+}
+
+.form-control, .form-select {
+    border-radius: 10px;
+    border: 1px solid #dee2e6;
+    padding: 12px 16px;
+}
+
+.form-control:focus, .form-select:focus {
+    border-color: #0d6efd;
+    box-shadow: 0 0 0 0.2rem rgba(13, 110, 253, 0.15);
+}
+
+.expense-item {
+    background: #f8f9fa;
+    border-radius: 12px;
+    padding: 16px;
+    margin-bottom: 12px;
+    transition: all 0.2s;
+}
+
+.expense-item:hover {
+    background: #e9ecef;
+}
+
+.stat-card {
+    border-radius: 16px;
+    padding: 20px;
+    color: white;
+    text-align: center;
+}
+
+.stat-card.today {
+    background: linear-gradient(135deg, #dc3545 0%, #ef4444 100%);
+}
+
+.stat-card.month {
+    background: linear-gradient(135deg, #fd7e14 0%, #ff9800 100%);
+}
+
+.stat-card.total {
+    background: linear-gradient(135deg, #0d6efd 0%, #4c9aff 100%);
+}
+
+.category-badge {
+    display: inline-block;
+    padding: 6px 14px;
+    border-radius: 20px;
+    font-size: 13px;
+    font-weight: 500;
+    background: #e9ecef;
+    color: #495057;
+}
+
+.amount-negative {
+    color: #dc3545;
+    font-weight: 600;
+}
+
+.amount-positive {
+    color: #198754;
+    font-weight: 600;
+}
+
+@media (max-width: 768px) {
+    .bank-card {
+        min-height: 140px;
+        padding: 20px;
+    }
+
+    .stat-card {
+        margin-bottom: 12px;
+    }
+
+    .expense-item {
+        padding: 12px;
+    }
+}

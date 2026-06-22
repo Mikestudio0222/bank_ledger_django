@@ -1,0 +1,47 @@
+{% extends 'ledger/base.html' %}
+
+{% block title %}删除银行卡 - 银行卡记账系统{% endblock %}
+
+{% block content %}
+<div class="row justify-content-center">
+    <div class="col-md-8 col-lg-6">
+        <div class="card shadow">
+            <div class="card-body p-4">
+                <h4 class="mb-4 text-danger">
+                    <i class="fas fa-exclamation-triangle me-2"></i>确认删除
+                </h4>
+
+                <div class="alert {% if expense_count %}alert-warning{% else %}alert-danger{% endif %}">
+                    <i class="fas fa-info-circle me-2"></i>
+                    确定要删除银行卡 <strong>{{ bank_card.name }}</strong> 吗？<br>
+                    {% if expense_count %}
+                    这张卡下还有 {{ expense_count }} 条消费记录。为避免账目丢失，请先处理相关记录后再删除银行卡。
+                    {% else %}
+                    此操作无法撤销！
+                    {% endif %}
+                </div>
+
+                <div class="bank-card shadow mb-4">
+                    <div class="d-flex justify-content-between align-items-start mb-4">
+                        <i class="fas {{ bank_card.icon }} fa-2x opacity-75"></i>
+                    </div>
+                    <h5 class="mb-2">{{ bank_card.name }}</h5>
+                    <h3 class="fw-bold mb-0">¥{{ bank_card.balance }}</h3>
+                </div>
+
+                <form method="post">
+                    {% csrf_token %}
+                    <div class="d-flex gap-2">
+                        <a href="{% url 'dashboard' %}" class="btn btn-secondary flex-fill py-3">
+                            取消
+                        </a>
+                        <button type="submit" class="btn btn-danger flex-fill py-3" {% if expense_count %}disabled{% endif %}>
+                            <i class="fas fa-trash me-2"></i>确认删除
+                        </button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

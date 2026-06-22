@@ -1,0 +1,14 @@
+
+
+services:
+  web:
+    build: .
+    container_name: ledger_app
+    ports:
+      - "8000:8000"
+    volumes:
+      # 这一行非常核心：把容器内部的数据文件“映射”到你电脑当前目录下
+      # 这样你在系统里记的账才不会因为 Docker 容器的重启而消失
+      - .:/app
+    environment:
+      - DEBUG=True
